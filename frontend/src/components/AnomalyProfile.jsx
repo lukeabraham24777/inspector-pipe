@@ -32,10 +32,10 @@ export default function AnomalyProfile({ row, onClose }) {
     { year: 2022, run: row.run_2022 },
   ].filter(r => r.run != null);
 
-  const matchScores = [
-    { label: '2007\u20132015', value: row.match_score_07_15 },
-    { label: '2015\u20132022', value: row.match_score_15_22 },
-    { label: '2007\u20132022', value: row.match_score_07_22 },
+  const matchPairs = [
+    { label: '2007\u20132015', value: row.match_score_07_15, detail: row.match_detail_07_15 },
+    { label: '2015\u20132022', value: row.match_score_15_22, detail: row.match_detail_15_22 },
+    { label: '2007\u20132022', value: row.match_score_07_22, detail: row.match_detail_07_22 },
   ].filter(s => s.value != null);
 
   return (
@@ -151,18 +151,27 @@ export default function AnomalyProfile({ row, onClose }) {
         )}
 
         {/* Match Confidence */}
-        {matchScores.length > 0 && (
+        {matchPairs.length > 0 && (
           <div>
             <h3 className="section-label mb-2.5">Match Confidence</h3>
-            <div className="space-y-2">
-              {matchScores.map(({ label, value }) => (
-                <ConfidenceBar key={label} label={label} value={value} />
+            <div className="space-y-3">
+              {matchPairs.map(({ label, value, detail }) => (
+                <div key={label}>
+                  <ConfidenceBar label={label} value={value} />
+                  {detail && (
+                    <div className="ml-[68px] mt-1.5 space-y-1">
+                      <ComponentBar label="Distance" value={detail.distance_confidence} weight="50%" />
+                      <ComponentBar label="Clock" value={detail.clock_confidence} weight="30%" />
+                      <ComponentBar label="Feature" value={detail.feature_confidence} weight="20%" />
+                    </div>
+                  )}
+                </div>
               ))}
-              {matchScores.length > 1 && (
+              {matchPairs.length > 1 && (
                 <div className="border-t border-edge-subtle pt-2 mt-2">
                   <ConfidenceBar
                     label="Overall"
-                    value={matchScores.reduce((s, e) => s + e.value, 0) / matchScores.length}
+                    value={matchPairs.reduce((s, e) => s + e.value, 0) / matchPairs.length}
                     highlight
                   />
                 </div>
@@ -236,6 +245,24 @@ function ConfidenceBar({ label, value, highlight }) {
       <span className={`text-[11px] mono w-10 text-right ${highlight ? 'font-semibold text-hi' : 'text-mid'}`}>
         {(value * 100).toFixed(0)}%
       </span>
+    </div>
+  );
+}
+
+function ComponentBar({ label, value, weight }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] text-lo w-14">{label}</span>
+      <div className="flex-1 bg-elevated rounded-full h-1">
+        <div
+          className={`h-1 rounded-full ${
+            value >= 0.7 ? 'bg-ok/60' : value >= 0.4 ? 'bg-warn/60' : 'bg-critical/60'
+          }`}
+          style={{ width: `${value * 100}%` }}
+        />
+      </div>
+      <span className="text-[10px] mono text-lo w-8 text-right">{(value * 100).toFixed(0)}%</span>
+      <span className="text-[9px] text-lo/50 w-6">{weight}</span>
     </div>
   );
 }

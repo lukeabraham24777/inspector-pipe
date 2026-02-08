@@ -9,6 +9,7 @@ import ClusterChart from './components/ClusterChart';
 import CorrosionPredictionChart from './components/CorrosionPredictionChart';
 import AnomalyTable from './components/AnomalyTable';
 import AnomalyProfile from './components/AnomalyProfile';
+import DataProcessingChecklist from './components/DataProcessingChecklist';
 import { uploadFile, exportXlsx } from './services/api';
 
 function App() {
@@ -96,6 +97,9 @@ function App() {
         {/* Results */}
         {data && (
           <>
+            {/* Data Processing Checklist */}
+            <DataProcessingChecklist summary={data.summary} />
+
             {/* Summary */}
             <SummaryCards summary={data.summary} />
 

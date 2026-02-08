@@ -185,6 +185,9 @@ def build_matched_anomaly_table(alignment_result: dict) -> list[dict]:
                 "match_score_07_15": None,
                 "match_score_15_22": None,
                 "match_score_07_22": None,
+                "match_detail_07_15": None,
+                "match_detail_15_22": None,
+                "match_detail_07_22": None,
                 "growth_07_15": None,
                 "growth_15_22": None,
                 "growth_07_22": None,
@@ -197,6 +200,7 @@ def build_matched_anomaly_table(alignment_result: dict) -> list[dict]:
                 i15 = m15["idx_b"]
                 entry["run_2015"] = _row_to_dict(df15, i15, 2015)
                 entry["match_score_07_15"] = _safe_float(m15["match_score"])
+                entry["match_detail_07_15"] = m15.get("match_detail")
 
                 # Growth 07->15
                 entry["growth_07_15"] = compute_depth_growth(
@@ -220,6 +224,7 @@ def build_matched_anomaly_table(alignment_result: dict) -> list[dict]:
                     i22 = m22["idx_b"]
                     entry["run_2022"] = _row_to_dict(df22, i22, 2022)
                     entry["match_score_15_22"] = _safe_float(m22["match_score"])
+                    entry["match_detail_15_22"] = m22.get("match_detail")
                     matched_22.add(i22)
 
                     # Growth 15->22
@@ -260,6 +265,7 @@ def build_matched_anomaly_table(alignment_result: dict) -> list[dict]:
                 i22 = m22["idx_b"]
                 entry["run_2022"] = _row_to_dict(df22, i22, 2022)
                 entry["match_score_07_22"] = _safe_float(m22["match_score"])
+                entry["match_detail_07_22"] = m22.get("match_detail")
                 matched_22.add(i22)
 
                 entry["growth_07_22"] = compute_depth_growth(
@@ -307,6 +313,9 @@ def build_matched_anomaly_table(alignment_result: dict) -> list[dict]:
                 "match_score_07_15": None,
                 "match_score_15_22": None,
                 "match_score_07_22": None,
+                "match_detail_07_15": None,
+                "match_detail_15_22": None,
+                "match_detail_07_22": None,
                 "growth_07_15": None,
                 "growth_15_22": None,
                 "growth_07_22": None,
@@ -318,6 +327,7 @@ def build_matched_anomaly_table(alignment_result: dict) -> list[dict]:
                 i22 = m22["idx_b"]
                 entry["run_2022"] = _row_to_dict(df22, i22, 2022)
                 entry["match_score_15_22"] = _safe_float(m22["match_score"])
+                entry["match_detail_15_22"] = m22.get("match_detail")
                 matched_22.add(i22)
                 entry["growth_15_22"] = compute_depth_growth(
                     entry["run_2015"]["depth_pct"],
@@ -352,6 +362,9 @@ def build_matched_anomaly_table(alignment_result: dict) -> list[dict]:
                 "match_score_07_15": None,
                 "match_score_15_22": None,
                 "match_score_07_22": None,
+                "match_detail_07_15": None,
+                "match_detail_15_22": None,
+                "match_detail_07_22": None,
                 "growth_07_15": None,
                 "growth_15_22": None,
                 "growth_07_22": None,

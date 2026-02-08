@@ -129,6 +129,11 @@ def _local_hungarian_match(
                 "cost": float(score),
                 "match_score": round(float(match_quality), 4),
                 "accepted": score <= cost_threshold,
+                "match_detail": {
+                    "distance_confidence": round(float(1.0 - dist_norm[r, c]), 4),
+                    "clock_confidence": round(float(1.0 - clock_norm[r, c]), 4),
+                    "feature_confidence": round(float(1.0 - feat_matrix[r, c]), 4),
+                },
             })
 
     return matches
