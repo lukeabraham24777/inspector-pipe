@@ -1,0 +1,278 @@
+import { X, AlertTriangle, Clock, TrendingUp, MapPin, Ruler } from 'lucide-react';
+
+const SEVERITY_CONFIG = {
+  critical: { label: 'Critical', color: '#dc2626', bg: 'bg-red-100 text-red-800', deadline: 'Immediate Repair Required', citation: '49 CFR 192.485' },
+  moderate: { label: 'Moderate', color: '#ea580c', bg: 'bg-orange-100 text-orange-800', deadline: '60-Day Repair Window', citation: 'ASME B31.8S Table 4' },
+  low: { label: 'Low', color: '#22c55e', bg: 'bg-green-100 text-green-800', deadline: 'Scheduled Maintenance', citation: '49 CFR 192.485(c)' },
+  unknown: { label: 'Monitor', color: '#6b7280', bg: 'bg-gray-100 text-gray-600', deadline: 'Routine Monitoring', citation: '49 CFR 192.485(d)' },
+};
+
+function formatClock(decimal) {
+  if (decimal == null) return 'N/A';
+  const hours = Math.floor(decimal);
+  const minutes = Math.round((decimal - hours) * 60);
+  return `${hours}:${String(minutes).padStart(2, '0')}`;
+}
+
+export default function AnomalyProfile({ row, onClose }) {
+  const latestRun = row.run_2022 || row.run_2015 || row.run_2007;
+  const latestGrowth = row.growth_15_22 || row.growth_07_22 || row.growth_07_15;
+  const config = SEVERITY_CONFIG[row.severity] || SEVERITY_CONFIG.unknown;
+
+  const featureId = latestRun?.feature_id || '-';
+  const depthGrowth = latestGrowth?.annual_growth_rate_pct;
+  const ttc = latestGrowth?.time_to_critical_years;
+  const distance = latestRun?.corrected_odometer_ft ?? latestRun?.odometer_ft;
+  const clockPos = latestRun?.clock_position;
+  const clockDegrees = clockPos != null ? clockPos * 30 : null;
+
+  const runs = [
+    { year: 2007, run: row.run_2007 },
+    { year: 2015, run: row.run_2015 },
+    { year: 2022, run: row.run_2022 },
+  ].filter(r => r.run != null);
+
+  const matchScores = [
+    { label: '2007–2015', value: row.match_score_07_15 },
+    { label: '2015–2022', value: row.match_score_15_22 },
+    { label: '2007–2022', value: row.match_score_07_22 },
+  ].filter(s => s.value != null);
+
+  return (
+    <div className="fixed right-0 top-0 h-full w-96 bg-white border-l border-gray-200 shadow-xl z-50 overflow-y-auto">
+      {/* Header */}
+      <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+        <div>
+          <h2 className="font-bold text-lg text-gray-900">{featureId}</h2>
+          <span className={`inline-block mt-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${config.bg}`}>
+            {config.label}
+          </span>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-1 rounded-lg hover:bg-gray-100"
+        >
+          <X className="h-5 w-5 text-gray-500" />
+        </button>
+      </div>
+
+      <div className="p-6 space-y-6">
+        {/* Regulatory Info */}
+        <div className="rounded-lg p-4" style={{ backgroundColor: `${config.color}10` }}>
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className="h-4 w-4" style={{ color: config.color }} />
+            <span className="font-semibold text-sm" style={{ color: config.color }}>
+              {config.deadline}
+            </span>
+          </div>
+          <p className="text-xs text-gray-600">{config.citation}</p>
+        </div>
+
+        {/* Key Metrics */}
+        <div className="grid grid-cols-2 gap-4">
+          <MetricBox
+            icon={<TrendingUp className="h-4 w-4 text-blue-600" />}
+            label="Depth Growth"
+            value={depthGrowth != null ? `${depthGrowth.toFixed(2)}%/yr` : 'N/A'}
+            warning={depthGrowth != null && depthGrowth > 3}
+          />
+          <MetricBox
+            icon={<Clock className="h-4 w-4 text-orange-600" />}
+            label="Time to Critical"
+            value={ttc != null ? `${ttc.toFixed(1)} yr` : 'N/A'}
+            warning={ttc != null && ttc < 5}
+          />
+          <MetricBox
+            icon={<Ruler className="h-4 w-4 text-green-600" />}
+            label="Distance"
+            value={distance != null ? `${distance.toFixed(0)} ft` : 'N/A'}
+          />
+          <MetricBox
+            icon={<MapPin className="h-4 w-4 text-purple-600" />}
+            label="Clock Position"
+            value={formatClock(clockPos)}
+          />
+        </div>
+
+        {/* Inspection History */}
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Inspection History</h3>
+          <div className="space-y-3">
+            {runs.map(({ year, run }, i) => (
+              <div key={year} className="border border-gray-200 rounded-lg p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-gray-500 uppercase">
+                    Run {i + 1} — {year}
+                  </span>
+                  <span className="text-xs text-gray-400">{run.feature_id || '-'}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <span className="text-gray-500">Depth</span>
+                    <p className="font-medium">{run.depth_pct != null ? `${run.depth_pct.toFixed(1)}%` : '-'}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Length</span>
+                    <p className="font-medium">{run.length_in != null ? `${run.length_in.toFixed(2)} in` : '-'}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Width</span>
+                    <p className="font-medium">{run.width_in != null ? `${run.width_in.toFixed(2)} in` : '-'}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Distance</span>
+                    <p className="font-medium">{run.odometer_ft != null ? `${run.odometer_ft.toFixed(0)} ft` : '-'}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Corrected</span>
+                    <p className="font-medium">{run.corrected_odometer_ft != null ? `${run.corrected_odometer_ft.toFixed(0)} ft` : '-'}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Wall</span>
+                    <p className="font-medium">{run.wall_thickness_in != null ? `${run.wall_thickness_in.toFixed(3)} in` : '-'}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Growth Rates */}
+        {latestGrowth && (
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Growth Rates</h3>
+            <div className="space-y-2">
+              <GrowthBar label="Depth" rate={depthGrowth || 0} unit="%/yr" max={10} />
+              <GrowthBar label="Length" rate={latestGrowth.annual_length_growth_in || 0} unit="in/yr" max={2} />
+              <GrowthBar label="Width" rate={latestGrowth.annual_width_growth_in || 0} unit="in/yr" max={2} />
+            </div>
+          </div>
+        )}
+
+        {/* Match Confidence */}
+        {matchScores.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Match Confidence</h3>
+            <div className="space-y-2">
+              {matchScores.map(({ label, value }) => (
+                <ConfidenceBar key={label} label={label} value={value} />
+              ))}
+              {matchScores.length > 1 && (
+                <div className="border-t pt-2 mt-2">
+                  <ConfidenceBar
+                    label="Overall"
+                    value={matchScores.reduce((s, e) => s + e.value, 0) / matchScores.length}
+                    highlight
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Pipe Cross-Section */}
+        {clockDegrees != null && (
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Pipe Cross-Section</h3>
+            <ClockPositionDiagram degrees={clockDegrees} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MetricBox({ icon, label, value, warning }) {
+  return (
+    <div className="border border-gray-200 rounded-lg p-3">
+      <div className="flex items-center gap-1.5 mb-1">
+        {icon}
+        <span className="text-xs text-gray-500">{label}</span>
+      </div>
+      <p className={`text-sm font-semibold ${warning ? 'text-red-600' : 'text-gray-900'}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function GrowthBar({ label, rate, unit, max }) {
+  const pct = Math.min(100, (Math.abs(rate) / max) * 100);
+  const isNeg = rate < 0;
+
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs text-gray-500 w-14">{label}</span>
+      <div className="flex-1 bg-gray-200 rounded-full h-2">
+        <div
+          className={`h-2 rounded-full ${
+            Math.abs(rate) > max * 0.6 ? 'bg-red-500' : Math.abs(rate) > max * 0.3 ? 'bg-yellow-500' : 'bg-green-500'
+          }`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className={`text-xs font-medium w-16 text-right ${isNeg ? 'text-blue-600' : ''}`}>
+        {rate.toFixed(2)} {unit}
+      </span>
+    </div>
+  );
+}
+
+function ConfidenceBar({ label, value, highlight }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className={`text-xs w-20 ${highlight ? 'font-semibold text-gray-700' : 'text-gray-500'}`}>
+        {label}
+      </span>
+      <div className="flex-1 bg-gray-200 rounded-full h-2">
+        <div
+          className={`h-2 rounded-full ${
+            value >= 0.7 ? 'bg-green-500' : value >= 0.4 ? 'bg-yellow-500' : 'bg-red-500'
+          }`}
+          style={{ width: `${value * 100}%` }}
+        />
+      </div>
+      <span className={`text-xs w-10 text-right ${highlight ? 'font-semibold' : ''}`}>
+        {(value * 100).toFixed(0)}%
+      </span>
+    </div>
+  );
+}
+
+function ClockPositionDiagram({ degrees }) {
+  const radius = 50;
+  const cx = 60;
+  const cy = 60;
+
+  const rad = ((degrees - 90) * Math.PI) / 180;
+  const dotX = cx + radius * Math.cos(rad);
+  const dotY = cy + radius * Math.sin(rad);
+
+  return (
+    <div className="flex justify-center">
+      <svg width="120" height="120" viewBox="0 0 120 120">
+        <circle cx={cx} cy={cy} r={radius} fill="none" stroke="#d1d5db" strokeWidth="8" />
+        <circle cx={cx} cy={cy} r={radius - 4} fill="none" stroke="#e5e7eb" strokeWidth="1" />
+
+        {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((deg) => {
+          const r = ((deg - 90) * Math.PI) / 180;
+          const x1 = cx + (radius - 12) * Math.cos(r);
+          const y1 = cy + (radius - 12) * Math.sin(r);
+          const x2 = cx + (radius - 6) * Math.cos(r);
+          const y2 = cy + (radius - 6) * Math.sin(r);
+          return (
+            <line key={deg} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#9ca3af" strokeWidth="1" />
+          );
+        })}
+
+        <text x={cx} y={15} textAnchor="middle" fontSize="8" fill="#6b7280">12</text>
+        <text x={115} y={cy + 3} textAnchor="middle" fontSize="8" fill="#6b7280">3</text>
+        <text x={cx} y={112} textAnchor="middle" fontSize="8" fill="#6b7280">6</text>
+        <text x={5} y={cy + 3} textAnchor="middle" fontSize="8" fill="#6b7280">9</text>
+
+        <circle cx={dotX} cy={dotY} r={5} fill="#dc2626" stroke="white" strokeWidth="2" />
+        <line x1={cx} y1={cy} x2={dotX} y2={dotY} stroke="#dc2626" strokeWidth="1" strokeDasharray="3,2" />
+      </svg>
+    </div>
+  );
+}

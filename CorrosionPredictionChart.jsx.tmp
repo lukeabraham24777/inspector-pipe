@@ -1,0 +1,198 @@
+import { useState, useMemo } from 'react';
+import Plot from 'react-plotly.js';
+
+const HORIZONS = [
+  { key: 'critical_count_5yr', label: '5 yr', years: 5 },
+  { key: 'critical_count_10yr', label: '10 yr', years: 10 },
+  { key: 'critical_count_15yr', label: '15 yr', years: 15 },
+  { key: 'critical_count_20yr', label: '20 yr', years: 20 },
+];
+
+export default function CorrosionPredictionChart({ predictionData }) {
+  const [horizon, setHorizon] = useState('critical_count_20yr');
+  const [showDensity, setShowDensity] = useState(false);
+  const [showGrowth, setShowGrowth] = useState(false);
+
+  if (!predictionData || !predictionData.positions_ft || predictionData.positions_ft.length === 0) {
+    return null;
+  }
+
+  const { positions_ft, composite_risk_score, new_anomaly_density,
+          avg_growth_rate_norm, high_risk_zones } = predictionData;
+
+  const criticalCounts = predictionData[horizon] || [];
+
+  // Color the risk area: green → yellow → red
+  const riskColors = useMemo(() => {
+    return composite_risk_score.map(v => {
+      if (v >= 0.7) return 'rgba(239, 68, 68, 0.6)';
+      if (v >= 0.4) return 'rgba(245, 158, 11, 0.6)';
+      return 'rgba(34, 197, 94, 0.4)';
+    });
+  }, [composite_risk_score]);
+
+  const traces = [];
+
+  // Main risk area fill
+  traces.push({
+    x: positions_ft,
+    y: composite_risk_score,
+    type: 'scatter',
+    mode: 'lines',
+    fill: 'tozeroy',
+    name: 'Composite Risk',
+    line: { color: '#EF4444', width: 2 },
+    fillcolor: 'rgba(239, 68, 68, 0.15)',
+    hovertemplate: 'Position: %{x:.0f} ft<br>Risk: %{y:.2f}<extra></extra>',
+  });
+
+  // Optional overlays
+  if (showDensity) {
+    traces.push({
+      x: positions_ft,
+      y: new_anomaly_density,
+      type: 'scatter',
+      mode: 'lines',
+      name: 'New Anomaly Density',
+      line: { color: '#8B5CF6', dash: 'dash', width: 1.5 },
+      hovertemplate: 'Position: %{x:.0f} ft<br>Density: %{y:.3f}<extra></extra>',
+    });
+  }
+
+  if (showGrowth) {
+    traces.push({
+      x: positions_ft,
+      y: avg_growth_rate_norm,
+      type: 'scatter',
+      mode: 'lines',
+      name: 'Avg Growth Rate (norm)',
+      line: { color: '#F59E0B', dash: 'dot', width: 1.5 },
+      hovertemplate: 'Position: %{x:.0f} ft<br>Growth: %{y:.3f}<extra></extra>',
+    });
+  }
+
+  // Critical count bar overlay (secondary y-axis)
+  if (criticalCounts.length > 0) {
+    traces.push({
+      x: positions_ft,
+      y: criticalCounts,
+      type: 'bar',
+      name: `Critical in ${HORIZONS.find(h => h.key === horizon)?.label || ''}`,
+      marker: { color: 'rgba(220, 38, 38, 0.2)' },
+      yaxis: 'y2',
+      hovertemplate: 'Position: %{x:.0f} ft<br>Critical: %{y}<extra></extra>',
+    });
+  }
+
+  // High-risk zone shapes
+  const shapes = high_risk_zones.map(zone => ({
+    type: 'rect',
+    x0: zone.start_ft,
+    x1: zone.end_ft,
+    y0: 0,
+    y1: 1.05,
+    fillcolor: 'rgba(239, 68, 68, 0.08)',
+    line: { color: 'rgba(239, 68, 68, 0.4)', width: 1, dash: 'dot' },
+    layer: 'below',
+  }));
+
+  const annotations = high_risk_zones.map(zone => ({
+    x: (zone.start_ft + zone.end_ft) / 2,
+    y: 1.02,
+    text: `Risk: ${(zone.risk_score * 100).toFixed(0)}%`,
+    showarrow: false,
+    font: { size: 9, color: '#DC2626' },
+    bgcolor: 'rgba(254, 226, 226, 0.8)',
+    borderpad: 2,
+  }));
+
+  const maxCritical = Math.max(...criticalCounts, 1);
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-800">Corrosion Risk Forecast</h3>
+          <p className="text-xs text-gray-500">KDE-based emergence density + growth extrapolation</p>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Horizon selector */}
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+            {HORIZONS.map(h => (
+              <button
+                key={h.key}
+                onClick={() => setHorizon(h.key)}
+                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                  horizon === h.key
+                    ? 'bg-white text-red-600 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {h.label}
+              </button>
+            ))}
+          </div>
+          {/* Toggle overlays */}
+          <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+            <input type="checkbox" checked={showDensity} onChange={() => setShowDensity(!showDensity)} className="rounded" />
+            Density
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+            <input type="checkbox" checked={showGrowth} onChange={() => setShowGrowth(!showGrowth)} className="rounded" />
+            Growth Rate
+          </label>
+        </div>
+      </div>
+
+      <Plot
+        data={traces}
+        layout={{
+          height: 380,
+          margin: { t: 20, r: 60, b: 50, l: 60 },
+          xaxis: {
+            title: 'Pipeline Position (ft)',
+            showgrid: true,
+            gridcolor: '#F3F4F6',
+          },
+          yaxis: {
+            title: 'Risk Score (0–1)',
+            range: [0, 1.1],
+            showgrid: true,
+            gridcolor: '#F3F4F6',
+          },
+          yaxis2: {
+            title: 'Projected Critical Count',
+            overlaying: 'y',
+            side: 'right',
+            range: [0, maxCritical * 2],
+            showgrid: false,
+          },
+          shapes,
+          annotations,
+          legend: {
+            orientation: 'h',
+            y: -0.2,
+            x: 0.5,
+            xanchor: 'center',
+          },
+          plot_bgcolor: 'white',
+          paper_bgcolor: 'white',
+          bargap: 0.3,
+        }}
+        config={{ responsive: true, displayModeBar: false }}
+        style={{ width: '100%' }}
+      />
+
+      {high_risk_zones.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <span className="text-xs font-medium text-gray-500">High-risk zones:</span>
+          {high_risk_zones.map((zone, i) => (
+            <span key={i} className="text-xs bg-red-50 text-red-700 px-2 py-0.5 rounded-full border border-red-200">
+              {zone.start_ft.toLocaleString()} – {zone.end_ft.toLocaleString()} ft ({(zone.risk_score * 100).toFixed(0)}% risk)
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

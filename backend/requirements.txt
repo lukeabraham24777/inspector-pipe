@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+pandas
+numpy
+scipy
+openpyxl
+python-multipart
+pydantic
+xlsxwriter
+pytest
+httpx

@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(dir:*)",
+      "Bash(npm run build:*)",
+      "Bash(del \"C:\\\\Users\\\\lukea\\\\RCP\\\\test_export.xlsx\")",
+      "Bash(curl:*)",
+      "Bash(taskkill:*)",
+      "Bash(timeout:*)",
+      "Bash(ping:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(ls:*)",
+      "Bash(wmic process:*)",
+      "Bash(wmic process where \"name=''python.exe''\" get ProcessId,CommandLine)",
+      "Bash(\"C:/Users/lukea/RCP/backend/venv/Scripts/python.exe\" -c \"\nimport traceback\ntry:\n    from app.core.normalizer import ingest_excel\n    from app.core.alignment import align_runs\n    from app.services.growth import build_matched_anomaly_table\n    import json\n\n    sheets = ingest_excel\\(r''C:\\\\Users\\\\lukea\\\\RCP\\\\Pipeline_Data.xlsx''\\)\n    alignment_result = align_runs\\(sheets, max_distance_ft=50.0, cost_threshold=0.8\\)\n    matched_table = build_matched_anomaly_table\\(alignment_result\\)\n\n    anomalies = alignment_result[''anomalies'']\n    gw_counts = {year: int\\(sheets[year][''is_girth_weld''].sum\\(\\)\\) for year in sheets}\n    matched_count = sum\\(1 for r in matched_table if r[''status''] == ''matched''\\)\n    new_count = sum\\(1 for r in matched_table if r[''status''].startswith\\(''new''\\)\\)\n    missing_count = sum\\(1 for r in matched_table if r[''status''] == ''missing''\\)\n    scores = [r.get\\(''match_score_07_15''\\) or r.get\\(''match_score_15_22''\\) or r.get\\(''match_score_07_22''\\) for r in matched_table if r[''status''] == ''matched'']\n    avg_score = sum\\(s for s in scores if s\\) / max\\(len\\([s for s in scores if s]\\), 1\\)\n    gw_alignment = alignment_result.get\\(''girth_weld_alignment'', []\\)\n    max_shift = max\\(\\(abs\\(g.get\\(''shift_ft'', 0\\)\\) for g in gw_alignment\\), default=0\\)\n    corrections_2015 = alignment_result[''odometer_corrections''].get\\(2015, []\\)\n    corrections_2022 = alignment_result[''odometer_corrections''].get\\(2022, []\\)\n\n    summary = {\n        ''total_anomalies_2007'': len\\(anomalies.get\\(2007, []\\)\\),\n        ''total_anomalies_2015'': len\\(anomalies.get\\(2015, []\\)\\),\n        ''total_anomalies_2022'': len\\(anomalies.get\\(2022, []\\)\\),\n        ''total_girth_welds_2007'': gw_counts.get\\(2007, 0\\),\n        ''total_girth_welds_2015'': gw_counts.get\\(2015, 0\\),\n        ''total_girth_welds_2022'': gw_counts.get\\(2022, 0\\),\n        ''matched_count'': matched_count,\n        ''new_anomalies_count'': new_count,\n        ''missing_anomalies_count'': missing_count,\n        ''avg_match_score'': round\\(avg_score, 4\\),\n        ''max_odometer_shift_ft'': round\\(max_shift, 2\\),\n    }\n\n    response_data = {\n        ''status'': ''complete'',\n        ''summary'': summary,\n        ''matched_table'': matched_table,\n        ''girth_weld_alignment'': gw_alignment,\n        ''odometer_corrections_2015'': corrections_2015,\n        ''odometer_corrections_2022'': corrections_2022,\n    }\n\n    from starlette.responses import JSONResponse\n    resp = JSONResponse\\(content=response_data\\)\n    body = resp.body\n    print\\(f''JSONResponse body length: {len\\(body\\)} bytes''\\)\n    print\\(''SUCCESS''\\)\nexcept Exception as e:\n    traceback.print_exc\\(\\)\n\")",
+      "Bash(\"C:/Users/lukea/RCP/backend/venv/Scripts/python.exe\" -c \"\nimport traceback, tempfile, os\n\ntry:\n    # Simulate exactly the upload flow\n    # 1. Read the file content\n    with open\\(r''C:\\\\Users\\\\lukea\\\\RCP\\\\Pipeline_Data.xlsx'', ''rb''\\) as f:\n        content = f.read\\(\\)\n    print\\(f''File content size: {len\\(content\\)} bytes''\\)\n\n    # 2. Write to temp file\n    with tempfile.NamedTemporaryFile\\(delete=False, suffix=''.xlsx''\\) as tmp:\n        tmp.write\\(content\\)\n        tmp_path = tmp.name\n    print\\(f''Temp file: {tmp_path}''\\)\n\n    # 3. Process \\(same as route\\)\n    from app.core.normalizer import ingest_excel\n    from app.core.alignment import align_runs\n    from app.services.growth import build_matched_anomaly_table\n\n    sheets = ingest_excel\\(tmp_path\\)\n    alignment_result = align_runs\\(sheets, max_distance_ft=50.0, cost_threshold=0.8\\)\n    matched_table = build_matched_anomaly_table\\(alignment_result\\)\n    print\\(f''Pipeline OK, {len\\(matched_table\\)} rows''\\)\n\n    # 4. Cleanup\n    os.unlink\\(tmp_path\\)\n    print\\(''Temp file cleaned up''\\)\n    print\\(''ALL OK''\\)\n\nexcept Exception as e:\n    traceback.print_exc\\(\\)\n\")",
+      "Bash(\"C:/Users/lukea/RCP/backend/venv/Scripts/python.exe\" -c:*)",
+      "Bash(cmd.exe /c \"cd C:\\\\Users\\\\lukea\\\\RCP\\\\backend && python -m pytest tests\\\\test_core.py -v\")",
+      "Bash(powershell.exe -Command \"cd C:\\\\Users\\\\lukea\\\\RCP\\\\backend; python -m pytest tests\\\\test_core.py -v\":*)",
+      "Bash(powershell.exe -Command \"cd C:\\\\Users\\\\lukea\\\\RCP\\\\frontend; npm run build\")",
+      "Bash(cmd.exe /c \"cd C:\\\\Users\\\\lukea\\\\RCP\\\\frontend && npm run build\":*)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -Command \"cd C:\\\\Users\\\\lukea\\\\RCP\\\\frontend; npm run build\")",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -Command \"cd C:\\\\Users\\\\lukea\\\\RCP; python -c \"\"import pandas as pd; xls = pd.ExcelFile\\(''C:\\\\Users\\\\lukea\\\\RCP\\\\Pipeline_Data.xlsx'', engine=''openpyxl''\\); sheets = [''2007'', ''2015'', ''2022'']; [print\\(f''\\\\n=== {s} columns ===''\\) or [print\\(f''  {repr\\(c\\)}''\\) for c in \\(df := pd.read_excel\\(xls, sheet_name=s, nrows=5\\)\\).columns] or print\\(f''  ID-like columns: {[c for c in df.columns if any\\(x in c.lower\\(\\) for x in [\"\"id\"\", \"\"feature\"\", \"\"number\"\", \"\"anomaly\"\"]\\)]}''\\) or [print\\(f''  Sample {c}: {df[c].head\\(\\).tolist\\(\\)}''\\) for c in [c for c in df.columns if any\\(x in c.lower\\(\\) for x in [''id'', ''feature'', ''number'', ''anomaly'']\\)]] for s in sheets]; xls.close\\(\\)\"\"\")",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -Command \"cd C:\\\\Users\\\\lukea\\\\RCP\\\\frontend; npm install mapbox-gl react-map-gl\")",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -Command \"cd backend; python -m pytest tests\\\\test_core.py -v 2>&1\")",
+      "Bash(powershell.exe:*)"
+    ]
+  }
+}

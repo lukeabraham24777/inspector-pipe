@@ -1,0 +1,142 @@
+import { useMemo } from 'react';
+import Plot from 'react-plotly.js';
+
+export default function ClusterChart({ clusterData }) {
+  if (!clusterData || !clusterData.bin_centers_ft || clusterData.bin_centers_ft.length === 0) {
+    return null;
+  }
+
+  const { bin_centers_ft, anomaly_counts, threshold, mean_density, clusters } = clusterData;
+
+  const barColors = useMemo(() => {
+    return anomaly_counts.map(count => {
+      if (count >= threshold * 1.5) return '#EF4444'; // red - 3x mean
+      if (count >= threshold) return '#F97316';        // orange - above threshold
+      return '#3B82F6';                                 // blue - normal
+    });
+  }, [anomaly_counts, threshold]);
+
+  const traces = [
+    // Bar chart of anomaly counts
+    {
+      x: bin_centers_ft,
+      y: anomaly_counts,
+      type: 'bar',
+      name: 'Anomaly Count',
+      marker: { color: barColors },
+      hovertemplate: 'Position: %{x:.0f} ft<br>Count: %{y}<extra></extra>',
+    },
+    // Threshold line
+    {
+      x: [bin_centers_ft[0], bin_centers_ft[bin_centers_ft.length - 1]],
+      y: [threshold, threshold],
+      type: 'scatter',
+      mode: 'lines',
+      name: `Threshold (${threshold.toFixed(1)})`,
+      line: { color: '#DC2626', dash: 'dash', width: 2 },
+      hoverinfo: 'skip',
+    },
+    // Mean line
+    {
+      x: [bin_centers_ft[0], bin_centers_ft[bin_centers_ft.length - 1]],
+      y: [mean_density, mean_density],
+      type: 'scatter',
+      mode: 'lines',
+      name: `Mean (${mean_density.toFixed(1)})`,
+      line: { color: '#6B7280', dash: 'dot', width: 1.5 },
+      hoverinfo: 'skip',
+    },
+  ];
+
+  // Add cluster zone rectangles as shapes
+  const shapes = clusters.map((c, i) => ({
+    type: 'rect',
+    x0: c.start_ft,
+    x1: c.end_ft,
+    y0: 0,
+    y1: Math.max(...anomaly_counts) * 1.1,
+    fillcolor: 'rgba(239, 68, 68, 0.08)',
+    line: { color: 'rgba(239, 68, 68, 0.3)', width: 1 },
+    layer: 'below',
+  }));
+
+  // Cluster label annotations
+  const annotations = clusters.map(c => ({
+    x: (c.start_ft + c.end_ft) / 2,
+    y: Math.max(...anomaly_counts) * 1.05,
+    text: `C${c.id} (${c.anomaly_count})`,
+    showarrow: false,
+    font: { size: 10, color: '#DC2626' },
+  }));
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-lg font-semibold text-gray-800">Anomaly Density & Clustering Along Pipeline</h3>
+        <span className="text-sm text-gray-500">{clusters.length} cluster{clusters.length !== 1 ? 's' : ''} detected</span>
+      </div>
+      <Plot
+        data={traces}
+        layout={{
+          height: 350,
+          margin: { t: 20, r: 30, b: 50, l: 60 },
+          xaxis: {
+            title: 'Pipeline Position (ft)',
+            showgrid: true,
+            gridcolor: '#F3F4F6',
+          },
+          yaxis: {
+            title: 'Anomaly Count per 200ft Bin',
+            showgrid: true,
+            gridcolor: '#F3F4F6',
+          },
+          shapes,
+          annotations,
+          legend: {
+            orientation: 'h',
+            y: -0.2,
+            x: 0.5,
+            xanchor: 'center',
+          },
+          plot_bgcolor: 'white',
+          paper_bgcolor: 'white',
+          bargap: 0.05,
+        }}
+        config={{ responsive: true, displayModeBar: false }}
+        style={{ width: '100%' }}
+      />
+      {clusters.length > 0 && (
+        <div className="mt-3 overflow-x-auto">
+          <table className="text-xs w-full">
+            <thead>
+              <tr className="text-gray-500 border-b">
+                <th className="px-2 py-1 text-left">Cluster</th>
+                <th className="px-2 py-1 text-left">Range (ft)</th>
+                <th className="px-2 py-1 text-right">Anomalies</th>
+                <th className="px-2 py-1 text-left">Severity</th>
+                <th className="px-2 py-1 text-right">Avg Depth</th>
+              </tr>
+            </thead>
+            <tbody>
+              {clusters.map(c => (
+                <tr key={c.id} className="border-b border-gray-100">
+                  <td className="px-2 py-1 font-medium">C{c.id}</td>
+                  <td className="px-2 py-1 font-mono">{c.start_ft.toLocaleString()} – {c.end_ft.toLocaleString()}</td>
+                  <td className="px-2 py-1 text-right font-mono">{c.anomaly_count}</td>
+                  <td className="px-2 py-1">
+                    <span className={`px-1.5 py-0.5 rounded text-xs ${
+                      c.dominant_severity === 'critical' ? 'bg-red-100 text-red-700' :
+                      c.dominant_severity === 'moderate' ? 'bg-orange-100 text-orange-700' :
+                      'bg-green-100 text-green-700'
+                    }`}>{c.dominant_severity}</span>
+                  </td>
+                  <td className="px-2 py-1 text-right font-mono">{c.avg_depth_pct}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}

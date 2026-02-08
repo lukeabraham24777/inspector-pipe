@@ -1,0 +1,74 @@
+import Plot from 'react-plotly.js';
+
+export default function GrowthScatterChart({ matchedTable }) {
+  if (!matchedTable || matchedTable.length === 0) return null;
+
+  // Extract anomalies with growth data
+  const points = matchedTable
+    .filter(r => r.run_2022 && r.run_2022.odometer_ft != null)
+    .map(r => {
+      const growth = r.growth_15_22 || r.growth_07_22 || r.growth_07_15;
+      const rate = growth?.annual_growth_rate_pct ?? null;
+      return {
+        x: r.run_2022.odometer_ft,
+        depth: r.run_2022.depth_pct,
+        rate,
+        severity: r.severity,
+        feature: r.run_2022.feature_description,
+      };
+    })
+    .filter(p => p.depth != null);
+
+  const critical = points.filter(p => p.severity === 'critical');
+  const moderate = points.filter(p => p.severity === 'moderate');
+  const low = points.filter(p => p.severity === 'low');
+  const unknown = points.filter(p => p.severity === 'unknown');
+
+  const makeTrace = (pts, name, color) => ({
+    x: pts.map(p => p.x),
+    y: pts.map(p => p.depth),
+    text: pts.map(p =>
+      `${p.feature}<br>Depth: ${p.depth?.toFixed(1)}%<br>Rate: ${p.rate != null ? p.rate.toFixed(2) + '%/yr' : 'N/A'}`
+    ),
+    type: 'scatter',
+    mode: 'markers',
+    name,
+    marker: { color, size: 6, opacity: 0.7 },
+    hovertemplate: '%{text}<extra></extra>',
+  });
+
+  const traces = [
+    makeTrace(critical, 'Critical (>10%/yr)', '#ef4444'),
+    makeTrace(moderate, 'Moderate (5-10%/yr)', '#f97316'),
+    makeTrace(low, 'Low (<5%/yr)', '#22c55e'),
+    makeTrace(unknown, 'Unknown', '#94a3b8'),
+  ].filter(t => t.x.length > 0);
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <h3 className="text-lg font-semibold text-gray-800 mb-3">Anomaly Depth vs. Distance (2022)</h3>
+      <Plot
+        data={traces}
+        layout={{
+          height: 350,
+          margin: { l: 60, r: 20, t: 20, b: 50 },
+          xaxis: {
+            title: 'Odometer (ft)',
+            gridcolor: '#f1f5f9',
+          },
+          yaxis: {
+            title: 'Depth (%WT)',
+            gridcolor: '#f1f5f9',
+            rangemode: 'tozero',
+          },
+          legend: { orientation: 'h', y: -0.2 },
+          plot_bgcolor: 'white',
+          paper_bgcolor: 'white',
+          font: { family: 'system-ui, sans-serif', size: 12 },
+        }}
+        config={{ responsive: true, displayModeBar: false }}
+        style={{ width: '100%' }}
+      />
+    </div>
+  );
+}

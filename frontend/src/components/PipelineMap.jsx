@@ -1,0 +1,323 @@
+import { useState, useMemo, useCallback } from 'react';
+import { AlertCircle } from 'lucide-react';
+
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
+
+const SEVERITY_COLORS = {
+  critical: '#dc2626',
+  moderate: '#ea580c',
+  low: '#22c55e',
+  unknown: '#6b7280',
+};
+
+const SEVERITY_LABELS = {
+  critical: 'Critical',
+  moderate: 'Moderate',
+  low: 'Low',
+  unknown: 'Unknown',
+};
+
+// Generate a synthetic pipeline route (Midland, TX area)
+function generatePipelineRoute(minDist, maxDist, numPoints = 200) {
+  const startLat = 31.9973;
+  const startLng = -102.0779;
+  const endLat = 32.2507;
+  const endLng = -101.4787;
+
+  const coords = [];
+  for (let i = 0; i < numPoints; i++) {
+    const t = i / (numPoints - 1);
+    const curve1 = Math.sin(t * Math.PI * 2) * 0.01;
+    const curve2 = Math.sin(t * Math.PI * 4) * 0.005;
+
+    coords.push({
+      lat: startLat + (endLat - startLat) * t + curve1,
+      lng: startLng + (endLng - startLng) * t + curve2,
+      distance: minDist + (maxDist - minDist) * t,
+    });
+  }
+  return coords;
+}
+
+function distanceToGps(distanceFt, pipelineCoords) {
+  if (!pipelineCoords.length) return { lat: 0, lng: 0 };
+  const maxDist = pipelineCoords[pipelineCoords.length - 1].distance;
+  const clampedDist = Math.max(pipelineCoords[0].distance, Math.min(distanceFt, maxDist));
+
+  let i = 0;
+  while (i < pipelineCoords.length - 1 && pipelineCoords[i + 1].distance < clampedDist) {
+    i++;
+  }
+  if (i >= pipelineCoords.length - 1) {
+    const last = pipelineCoords[pipelineCoords.length - 1];
+    return { lat: last.lat, lng: last.lng };
+  }
+  const p1 = pipelineCoords[i];
+  const p2 = pipelineCoords[i + 1];
+  const segLen = p2.distance - p1.distance;
+  const t = segLen > 0 ? (clampedDist - p1.distance) / segLen : 0;
+  return {
+    lat: p1.lat + (p2.lat - p1.lat) * t,
+    lng: p1.lng + (p2.lng - p1.lng) * t,
+  };
+}
+
+export default function PipelineMap({ matchedTable, onSelectAnomaly }) {
+  const [MapGL, setMapGL] = useState(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+
+  // Lazy-load react-map-gl to avoid SSR/build issues if mapbox isn't installed
+  useMemo(() => {
+    if (MAPBOX_TOKEN && !MapGL && !loadError) {
+      import('react-map-gl/mapbox').then((mod) => {
+        import('mapbox-gl/dist/mapbox-gl.css');
+        setMapGL(mod);
+        setMapLoaded(true);
+      }).catch(() => {
+        setLoadError(true);
+      });
+    }
+  }, [MAPBOX_TOKEN, MapGL, loadError]);
+
+  // Compute anomaly positions + GeoJSON
+  const { anomalyGeoJson, severityCounts, pipelineGeoJson, initialViewState } = useMemo(() => {
+    if (!matchedTable || matchedTable.length === 0) {
+      return { anomalyGeoJson: null, severityCounts: {}, pipelineGeoJson: null, initialViewState: null };
+    }
+
+    const distances = [];
+    for (const entry of matchedTable) {
+      const run = entry.run_2022 || entry.run_2015 || entry.run_2007;
+      if (run) {
+        const d = run.corrected_odometer_ft ?? run.odometer_ft;
+        if (d != null) distances.push(d);
+      }
+    }
+    if (distances.length === 0) {
+      return { anomalyGeoJson: null, severityCounts: {}, pipelineGeoJson: null, initialViewState: null };
+    }
+
+    const minDist = Math.min(...distances);
+    const maxDist = Math.max(...distances);
+    const coords = generatePipelineRoute(minDist, maxDist);
+
+    const counts = { critical: 0, moderate: 0, low: 0, unknown: 0 };
+    const features = [];
+
+    for (let i = 0; i < matchedTable.length; i++) {
+      const entry = matchedTable[i];
+      const run = entry.run_2022 || entry.run_2015 || entry.run_2007;
+      if (!run) continue;
+      const d = run.corrected_odometer_ft ?? run.odometer_ft;
+      if (d == null) continue;
+
+      const severity = entry.severity || 'unknown';
+      counts[severity] = (counts[severity] || 0) + 1;
+      const depth = run.depth_pct ?? 0;
+      const pos = distanceToGps(d, coords);
+
+      if (pos.lat === 0 && pos.lng === 0) continue;
+
+      features.push({
+        type: 'Feature',
+        properties: { id: i, severity, depth },
+        geometry: { type: 'Point', coordinates: [pos.lng, pos.lat] },
+      });
+    }
+
+    const geoJson = {
+      type: 'Feature',
+      properties: {},
+      geometry: { type: 'LineString', coordinates: coords.map((c) => [c.lng, c.lat]) },
+    };
+
+    const lats = coords.map((c) => c.lat);
+    const lngs = coords.map((c) => c.lng);
+    const viewState = {
+      latitude: (Math.min(...lats) + Math.max(...lats)) / 2,
+      longitude: (Math.min(...lngs) + Math.max(...lngs)) / 2,
+      zoom: 10,
+    };
+
+    return {
+      anomalyGeoJson: { type: 'FeatureCollection', features },
+      severityCounts: counts,
+      pipelineGeoJson: geoJson,
+      initialViewState: viewState,
+    };
+  }, [matchedTable]);
+
+  // Handle map clicks (clusters + unclustered points)
+  const handleMapClick = useCallback((e) => {
+    const map = e.target;
+
+    const pointFeatures = map.queryRenderedFeatures(e.point, { layers: ['unclustered-point'] });
+    if (pointFeatures.length > 0) {
+      const rowIndex = pointFeatures[0].properties.id;
+      if (onSelectAnomaly && matchedTable[rowIndex]) {
+        onSelectAnomaly(matchedTable[rowIndex]);
+      }
+      return;
+    }
+
+    const clusterFeatures = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
+    if (clusterFeatures.length > 0) {
+      const clusterId = clusterFeatures[0].properties.cluster_id;
+      const source = map.getSource('anomalies');
+      source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+        if (err) return;
+        map.easeTo({ center: clusterFeatures[0].geometry.coordinates, zoom });
+      });
+    }
+  }, [onSelectAnomaly, matchedTable]);
+
+  if (!matchedTable || matchedTable.length === 0) return null;
+
+  // Fallback: no token or map failed to load
+  if (!MAPBOX_TOKEN || loadError || !mapLoaded || !MapGL) {
+    return (
+      <div className="card overflow-hidden">
+        <div className="px-4 py-3 border-b border-edge">
+          <h3 className="section-label">Pipeline Map</h3>
+        </div>
+        <div className="h-[280px] bg-elevated flex flex-col items-center justify-center p-8">
+          <AlertCircle className="h-8 w-8 text-warn mb-3" />
+          <h4 className="text-[13px] font-medium text-hi mb-1">Mapbox Token Required</h4>
+          <p className="text-[12px] text-lo text-center max-w-sm mb-4">
+            Add your token to <code className="bg-raised px-1 rounded text-[11px] mono">.env</code> as <code className="bg-raised px-1 rounded text-[11px] mono">VITE_MAPBOX_TOKEN</code>
+          </p>
+          <div className="grid grid-cols-4 gap-4">
+            {Object.entries(SEVERITY_LABELS).map(([key, label]) => (
+              <div key={key} className="text-center">
+                <div
+                  className="w-9 h-9 rounded-full mx-auto mb-1 flex items-center justify-center text-white text-[12px] font-semibold mono"
+                  style={{ backgroundColor: SEVERITY_COLORS[key] }}
+                >
+                  {severityCounts[key] || 0}
+                </div>
+                <p className="text-[11px] text-lo">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const { default: MapGLComponent, Source, Layer, NavigationControl } = MapGL;
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="px-4 py-3 border-b border-edge">
+        <h3 className="section-label">Pipeline Map</h3>
+      </div>
+      <div className="h-[460px] relative">
+        <MapGLComponent
+          initialViewState={initialViewState}
+          mapboxAccessToken={MAPBOX_TOKEN}
+          mapStyle="mapbox://styles/mapbox/dark-v11"
+          style={{ width: '100%', height: '100%' }}
+          onClick={handleMapClick}
+          interactiveLayerIds={['clusters', 'unclustered-point']}
+          cursor="pointer"
+        >
+          <NavigationControl position="top-right" />
+
+          {/* Pipeline line */}
+          <Source id="pipeline" type="geojson" data={pipelineGeoJson}>
+            <Layer
+              id="pipeline-casing"
+              type="line"
+              paint={{ 'line-color': '#1e40af', 'line-width': 6, 'line-opacity': 0.3 }}
+            />
+            <Layer
+              id="pipeline-line"
+              type="line"
+              paint={{ 'line-color': '#3b82f6', 'line-width': 4, 'line-opacity': 0.7 }}
+            />
+          </Source>
+
+          {/* Anomaly markers (clustered GeoJSON) */}
+          {anomalyGeoJson && (
+            <Source
+              id="anomalies"
+              type="geojson"
+              data={anomalyGeoJson}
+              cluster={true}
+              clusterMaxZoom={14}
+              clusterRadius={50}
+            >
+              <Layer
+                id="clusters"
+                type="circle"
+                filter={['has', 'point_count']}
+                paint={{
+                  'circle-color': [
+                    'step', ['get', 'point_count'],
+                    '#3b82f6', 10,
+                    '#e5a525', 30,
+                    '#f59e0b', 100,
+                    '#dc2626',
+                  ],
+                  'circle-radius': [
+                    'step', ['get', 'point_count'],
+                    18, 10, 24, 30, 30, 100, 36,
+                  ],
+                  'circle-stroke-width': 2,
+                  'circle-stroke-color': '#0c1117',
+                }}
+              />
+              <Layer
+                id="cluster-count"
+                type="symbol"
+                filter={['has', 'point_count']}
+                layout={{
+                  'text-field': ['get', 'point_count_abbreviated'],
+                  'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+                  'text-size': 12,
+                }}
+                paint={{ 'text-color': '#ffffff' }}
+              />
+              <Layer
+                id="unclustered-point"
+                type="circle"
+                filter={['!', ['has', 'point_count']]}
+                paint={{
+                  'circle-color': [
+                    'match', ['get', 'severity'],
+                    'critical', '#dc2626',
+                    'moderate', '#ea580c',
+                    'low', '#22c55e',
+                    '#6b7280',
+                  ],
+                  'circle-radius': [
+                    'interpolate', ['linear'], ['get', 'depth'],
+                    0, 5, 20, 6, 40, 8, 60, 10, 100, 14,
+                  ],
+                  'circle-stroke-width': 2,
+                  'circle-stroke-color': '#0c1117',
+                  'circle-opacity': 0.9,
+                }}
+              />
+            </Source>
+          )}
+        </MapGLComponent>
+
+        {/* Legend */}
+        <div className="absolute bottom-3 left-3 bg-surface/95 backdrop-blur-sm rounded-md border border-edge p-2.5 text-[11px]">
+          <p className="font-medium text-mid mb-1.5">Severity</p>
+          <div className="space-y-1">
+            {Object.entries(SEVERITY_LABELS).map(([key, label]) => (
+              <div key={key} className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: SEVERITY_COLORS[key] }} />
+                <span className="text-mid">{label}</span>
+                <span className="text-lo ml-auto mono">({severityCounts[key] || 0})</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

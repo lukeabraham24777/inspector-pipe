@@ -1,0 +1,283 @@
+import { useState, useMemo } from 'react';
+import { Search, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+
+const severityColors = {
+  critical: 'bg-red-100 text-red-800',
+  moderate: 'bg-orange-100 text-orange-800',
+  low: 'bg-green-100 text-green-800',
+  unknown: 'bg-gray-100 text-gray-600',
+};
+
+const statusLabels = {
+  matched: 'Matched',
+  missing: 'Missing',
+  new_2015: 'New (2015)',
+  new_2022: 'New (2022)',
+};
+
+export default function AnomalyTable({ matchedTable, onSelectAnomaly }) {
+  const [search, setSearch] = useState('');
+  const [sortKey, setSortKey] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
+  const [page, setPage] = useState(0);
+  const pageSize = 50;
+
+  const filtered = useMemo(() => {
+    if (!matchedTable) return [];
+    let rows = matchedTable;
+
+    if (search) {
+      const q = search.toLowerCase();
+      rows = rows.filter(r => {
+        const feat07 = r.run_2007?.feature_description?.toLowerCase() || '';
+        const feat15 = r.run_2015?.feature_description?.toLowerCase() || '';
+        const feat22 = r.run_2022?.feature_description?.toLowerCase() || '';
+        const odo = String(r.run_2022?.odometer_ft ?? r.run_2015?.odometer_ft ?? r.run_2007?.odometer_ft ?? '');
+        const jt = String(r.run_2022?.joint_number ?? r.run_2015?.joint_number ?? r.run_2007?.joint_number ?? '');
+        const fid = r.run_2022?.feature_id || r.run_2015?.feature_id || r.run_2007?.feature_id || '';
+        return feat07.includes(q) || feat15.includes(q) || feat22.includes(q) ||
+               odo.includes(q) || jt.includes(q) || r.status.includes(q) || r.severity.includes(q) ||
+               fid.toLowerCase().includes(q);
+      });
+    }
+
+    if (sortKey) {
+      rows = [...rows].sort((a, b) => {
+        let va = getSortValue(a, sortKey);
+        let vb = getSortValue(b, sortKey);
+        if (va == null && vb == null) return 0;
+        if (va == null) return 1;
+        if (vb == null) return -1;
+        if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+        return sortDir === 'asc' ? va - vb : vb - va;
+      });
+    }
+
+    return rows;
+  }, [matchedTable, search, sortKey, sortDir]);
+
+  const totalPages = Math.ceil(filtered.length / pageSize);
+  const pageRows = filtered.slice(page * pageSize, (page + 1) * pageSize);
+
+  const toggleSort = (key) => {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  };
+
+  const SortIcon = ({ col }) => {
+    if (sortKey !== col) return <ChevronsUpDown className="w-3 h-3 opacity-30" />;
+    return sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />;
+  };
+
+  if (!matchedTable || matchedTable.length === 0) return null;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center gap-3">
+        <h3 className="text-lg font-semibold text-gray-800">
+          Anomaly Lineage Table
+          <span className="text-sm font-normal text-gray-500 ml-2">
+            ({filtered.length} anomalies)
+          </span>
+        </h3>
+        <div className="flex-1" />
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search anomalies..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            className="pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-200">
+              {[
+                { key: 'status', label: 'Status' },
+                { key: 'feature_id', label: 'Feature ID' },
+                { key: 'severity', label: 'Severity' },
+                { key: 'odo_2007', label: '2007 Dist (ft)' },
+                { key: 'depth_2007', label: '2007 Depth' },
+                { key: 'odo_2015', label: '2015 Dist (ft)' },
+                { key: 'depth_2015', label: '2015 Depth' },
+                { key: 'odo_2022', label: '2022 Dist (ft)' },
+                { key: 'depth_2022', label: '2022 Depth' },
+                { key: 'growth_rate', label: 'Growth (%/yr)' },
+                { key: 'ttc', label: 'Time to Critical' },
+                { key: 'length_rate', label: 'Len (in/yr)' },
+                { key: 'width_rate', label: 'Wid (in/yr)' },
+                { key: 'match_score', label: 'Confidence' },
+              ].map(({ key, label }) => (
+                <th
+                  key={key}
+                  className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:bg-gray-50 whitespace-nowrap"
+                  onClick={() => toggleSort(key)}
+                >
+                  <div className="flex items-center gap-1">
+                    {label} <SortIcon col={key} />
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {pageRows.map((row, i) => {
+              const latestGrowth = row.growth_15_22 || row.growth_07_22 || row.growth_07_15;
+              const rate = latestGrowth?.annual_growth_rate_pct;
+              const ttc = latestGrowth?.time_to_critical_years;
+              const lenRate = latestGrowth?.annual_length_growth_in;
+              const widRate = latestGrowth?.annual_width_growth_in;
+              const score = row.match_score_07_15 || row.match_score_15_22 || row.match_score_07_22;
+              const featureId = row.run_2022?.feature_id || row.run_2015?.feature_id || row.run_2007?.feature_id || '-';
+
+              const depth07 = row.run_2007?.depth_pct;
+              const depth15 = row.run_2015?.depth_pct;
+              const depth22 = row.run_2022?.depth_pct;
+
+              return (
+                <tr key={i} className="hover:bg-blue-50 cursor-pointer transition-colors" onClick={() => onSelectAnomaly?.(row)}>
+                  <td className="px-3 py-2.5 text-sm text-gray-700">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                      row.status === 'matched' ? 'bg-green-100 text-green-800' :
+                      row.status === 'missing' ? 'bg-gray-100 text-gray-800' :
+                      row.status === 'new_2015' ? 'bg-blue-100 text-blue-800' :
+                      row.status === 'new_2022' ? 'bg-blue-100 text-blue-800' :
+                      'bg-amber-100 text-amber-700'
+                    }`}>
+                      {statusLabels[row.status] || row.status}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-sm text-gray-700 font-mono">{featureId}</td>
+                  <td className="px-3 py-2.5 text-sm text-gray-700">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${severityColors[row.severity]}`}>
+                      {row.severity}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-sm text-gray-700 font-mono">{row.run_2007?.odometer_ft?.toFixed(1) ?? '-'}</td>
+                  <td className={`px-3 py-2.5 text-sm font-mono ${
+                    depth07 != null && depth07 >= 60 ? 'text-red-600 font-semibold' :
+                    depth07 != null && depth07 >= 40 ? 'text-orange-600' :
+                    'text-gray-700'
+                  }`}>
+                    {depth07 != null ? `${depth07.toFixed(1)}%` : '-'}
+                  </td>
+                  <td className="px-3 py-2.5 text-sm text-gray-700 font-mono">{row.run_2015?.odometer_ft?.toFixed(1) ?? '-'}</td>
+                  <td className={`px-3 py-2.5 text-sm font-mono ${
+                    depth15 != null && depth15 >= 60 ? 'text-red-600 font-semibold' :
+                    depth15 != null && depth15 >= 40 ? 'text-orange-600' :
+                    'text-gray-700'
+                  }`}>
+                    {depth15 != null ? `${depth15.toFixed(1)}%` : '-'}
+                  </td>
+                  <td className="px-3 py-2.5 text-sm text-gray-700 font-mono">{row.run_2022?.odometer_ft?.toFixed(1) ?? '-'}</td>
+                  <td className={`px-3 py-2.5 text-sm font-mono ${
+                    depth22 != null && depth22 >= 60 ? 'text-red-600 font-semibold' :
+                    depth22 != null && depth22 >= 40 ? 'text-orange-600' :
+                    'text-gray-700'
+                  }`}>
+                    {depth22 != null ? `${depth22.toFixed(1)}%` : '-'}
+                  </td>
+                  <td className={`px-3 py-2.5 text-sm font-mono ${
+                    rate != null && rate > 3 ? 'text-red-600 font-semibold' :
+                    rate != null && rate > 1 ? 'text-orange-600' :
+                    rate != null ? 'text-gray-700' : 'text-gray-400'
+                  }`}>
+                    {rate != null ? rate.toFixed(2) : '-'}
+                  </td>
+                  <td className={`px-3 py-2.5 text-sm font-mono ${
+                    ttc != null && ttc < 5 ? 'text-red-600 font-semibold' : 'text-gray-700'
+                  }`}>
+                    {ttc != null ? `${ttc.toFixed(1)} yr` : <span className="text-gray-400">N/A</span>}
+                  </td>
+                  <td className="px-3 py-2.5 text-sm text-gray-700 font-mono">{lenRate != null ? lenRate.toFixed(4) : '-'}</td>
+                  <td className="px-3 py-2.5 text-sm text-gray-700 font-mono">{widRate != null ? widRate.toFixed(4) : '-'}</td>
+                  <td className="px-3 py-2.5 text-sm text-gray-700">
+                    {score != null ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 bg-gray-200 rounded-full h-2">
+                          <div
+                            className={`h-2 rounded-full ${
+                              score >= 0.7 ? 'bg-green-500' : score >= 0.4 ? 'bg-yellow-500' : 'bg-red-500'
+                            }`}
+                            style={{ width: `${score * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-gray-500">{(score * 100).toFixed(0)}%</span>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {totalPages > 1 && (
+        <div className="p-3 border-t border-gray-200 flex items-center justify-between">
+          <button
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={page === 0}
+            className="px-3 py-1 text-sm border rounded disabled:opacity-30 hover:bg-gray-50"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-gray-500">
+            Page {page + 1} of {totalPages}
+          </span>
+          <button
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            className="px-3 py-1 text-sm border rounded disabled:opacity-30 hover:bg-gray-50"
+          >
+            Next
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function getSortValue(row, key) {
+  switch (key) {
+    case 'status': return row.status;
+    case 'feature_id': return row.run_2022?.feature_id || row.run_2015?.feature_id || row.run_2007?.feature_id;
+    case 'severity': return row.severity;
+    case 'odo_2007': return row.run_2007?.odometer_ft;
+    case 'depth_2007': return row.run_2007?.depth_pct;
+    case 'odo_2015': return row.run_2015?.odometer_ft;
+    case 'depth_2015': return row.run_2015?.depth_pct;
+    case 'odo_2022': return row.run_2022?.odometer_ft;
+    case 'depth_2022': return row.run_2022?.depth_pct;
+    case 'growth_rate': {
+      const g = row.growth_15_22 || row.growth_07_22 || row.growth_07_15;
+      return g?.annual_growth_rate_pct;
+    }
+    case 'ttc': {
+      const g = row.growth_15_22 || row.growth_07_22 || row.growth_07_15;
+      return g?.time_to_critical_years;
+    }
+    case 'length_rate': {
+      const g = row.growth_15_22 || row.growth_07_22 || row.growth_07_15;
+      return g?.annual_length_growth_in;
+    }
+    case 'width_rate': {
+      const g = row.growth_15_22 || row.growth_07_22 || row.growth_07_15;
+      return g?.annual_width_growth_in;
+    }
+    case 'match_score':
+      return row.match_score_07_15 || row.match_score_15_22 || row.match_score_07_22;
+    default: return null;
+  }
+}
