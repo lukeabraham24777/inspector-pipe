@@ -78,6 +78,8 @@ def compute_dimension_growth(
         "width_growth_in": None,
         "annual_length_growth_in": None,
         "annual_width_growth_in": None,
+        "annual_length_growth_pct": None,
+        "annual_width_growth_pct": None,
     }
 
     if year_a >= year_b:
@@ -89,11 +91,15 @@ def compute_dimension_growth(
         lg = length_b - length_a
         result["length_growth_in"] = round(float(lg), 4)
         result["annual_length_growth_in"] = round(float(lg / years), 4)
+        if length_a > 0:
+            result["annual_length_growth_pct"] = round(float((lg / length_a) * 100.0 / years), 4)
 
     if width_a is not None and width_b is not None:
         wg = width_b - width_a
         result["width_growth_in"] = round(float(wg), 4)
         result["annual_width_growth_in"] = round(float(wg / years), 4)
+        if width_a > 0:
+            result["annual_width_growth_pct"] = round(float((wg / width_a) * 100.0 / years), 4)
 
     return result
 

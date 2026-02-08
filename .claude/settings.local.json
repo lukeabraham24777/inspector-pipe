@@ -26,7 +26,10 @@
       "Bash(powershell.exe -ExecutionPolicy Bypass -Command \"cd C:\\\\Users\\\\lukea\\\\RCP; python -c \"\"import pandas as pd; xls = pd.ExcelFile\\(''C:\\\\Users\\\\lukea\\\\RCP\\\\Pipeline_Data.xlsx'', engine=''openpyxl''\\); sheets = [''2007'', ''2015'', ''2022'']; [print\\(f''\\\\n=== {s} columns ===''\\) or [print\\(f''  {repr\\(c\\)}''\\) for c in \\(df := pd.read_excel\\(xls, sheet_name=s, nrows=5\\)\\).columns] or print\\(f''  ID-like columns: {[c for c in df.columns if any\\(x in c.lower\\(\\) for x in [\"\"id\"\", \"\"feature\"\", \"\"number\"\", \"\"anomaly\"\"]\\)]}''\\) or [print\\(f''  Sample {c}: {df[c].head\\(\\).tolist\\(\\)}''\\) for c in [c for c in df.columns if any\\(x in c.lower\\(\\) for x in [''id'', ''feature'', ''number'', ''anomaly'']\\)]] for s in sheets]; xls.close\\(\\)\"\"\")",
       "Bash(powershell.exe -ExecutionPolicy Bypass -Command \"cd C:\\\\Users\\\\lukea\\\\RCP\\\\frontend; npm install mapbox-gl react-map-gl\")",
       "Bash(powershell.exe -ExecutionPolicy Bypass -Command \"cd backend; python -m pytest tests\\\\test_core.py -v 2>&1\")",
-      "Bash(powershell.exe:*)"
+      "Bash(powershell.exe:*)",
+      "Bash(python3:*)",
+      "Bash(Select-Object ProcessId, CommandLine)",
+      "Bash(Format-List \")"
     ]
   }
 }

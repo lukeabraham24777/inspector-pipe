@@ -22,9 +22,27 @@ const statusLabels = {
   new_2022: 'New (2022)',
 };
 
+// Status rank for default sort: matched first, then new, then missing
+const STATUS_RANK = { matched: 0, new_2015: 1, new_2022: 2, missing: 3 };
+
+const COLUMNS = [
+  { key: 'status', label: 'Status' },
+  { key: 'feature_id', label: 'Feature ID' },
+  { key: 'severity', label: 'Severity' },
+  { key: 'latest_dist', label: 'Distance (ft)' },
+  { key: 'latest_depth', label: 'Depth (%)' },
+  { key: 'latest_length', label: 'Length (in)' },
+  { key: 'latest_width', label: 'Width (in)' },
+  { key: 'depth_growth', label: 'Depth Growth (%/yr)' },
+  { key: 'length_growth', label: 'Length Growth (%/yr)' },
+  { key: 'width_growth', label: 'Width Growth (%/yr)' },
+  { key: 'ttc', label: 'Time to Critical' },
+  { key: 'match_score', label: 'Confidence' },
+];
+
 export default function AnomalyTable({ matchedTable, onSelectAnomaly }) {
   const [search, setSearch] = useState('');
-  const [sortKey, setSortKey] = useState(null);
+  const [sortKey, setSortKey] = useState('status');
   const [sortDir, setSortDir] = useState('asc');
   const [page, setPage] = useState(0);
   const [expandedRows, setExpandedRows] = useState(new Set());
@@ -50,17 +68,16 @@ export default function AnomalyTable({ matchedTable, onSelectAnomaly }) {
       });
     }
 
-    if (sortKey) {
-      rows = [...rows].sort((a, b) => {
-        let va = getSortValue(a, sortKey);
-        let vb = getSortValue(b, sortKey);
-        if (va == null && vb == null) return 0;
-        if (va == null) return 1;
-        if (vb == null) return -1;
-        if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
-        return sortDir === 'asc' ? va - vb : vb - va;
-      });
-    }
+    // Always sort (default is status asc = matched first)
+    rows = [...rows].sort((a, b) => {
+      let va = getSortValue(a, sortKey);
+      let vb = getSortValue(b, sortKey);
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      return sortDir === 'asc' ? va - vb : vb - va;
+    });
 
     return rows;
   }, [matchedTable, search, sortKey, sortDir]);
@@ -119,16 +136,7 @@ export default function AnomalyTable({ matchedTable, onSelectAnomaly }) {
         <table className="w-full text-[12px]">
           <thead>
             <tr className="border-b border-edge bg-elevated">
-              {[
-                { key: 'status', label: 'Status' },
-                { key: 'feature_id', label: 'Feature ID' },
-                { key: 'severity', label: 'Severity' },
-                { key: 'latest_dist', label: 'Distance (ft)' },
-                { key: 'latest_depth', label: 'Depth (%)' },
-                { key: 'growth_rate', label: 'Growth (%/yr)' },
-                { key: 'ttc', label: 'Time to Critical' },
-                { key: 'match_score', label: 'Confidence' },
-              ].map(({ key, label }) => (
+              {COLUMNS.map(({ key, label }) => (
                 <th
                   key={key}
                   className="px-2.5 py-2 text-left text-[11px] font-medium text-lo uppercase tracking-wider cursor-pointer select-none hover:bg-raised whitespace-nowrap transition-colors"
@@ -147,11 +155,15 @@ export default function AnomalyTable({ matchedTable, onSelectAnomaly }) {
               const isExpanded = expandedRows.has(globalIndex);
               const latestRun = row.run_2022 || row.run_2015 || row.run_2007;
               const latestGrowth = row.growth_15_22 || row.growth_07_22 || row.growth_07_15;
-              const rate = latestGrowth?.annual_growth_rate_pct;
+              const depthRate = latestGrowth?.annual_growth_rate_pct;
+              const lenRate = latestGrowth?.annual_length_growth_pct;
+              const widRate = latestGrowth?.annual_width_growth_pct;
               const ttc = latestGrowth?.time_to_critical_years;
               const score = row.match_score_07_15 || row.match_score_15_22 || row.match_score_07_22;
               const dist = latestRun?.corrected_odometer_ft ?? latestRun?.odometer_ft;
               const depth = latestRun?.depth_pct;
+              const length = latestRun?.length_in;
+              const width = latestRun?.width_in;
               const featureId = latestRun?.feature_id || '-';
 
               return (
@@ -183,9 +195,9 @@ export default function AnomalyTable({ matchedTable, onSelectAnomaly }) {
                         {row.severity}
                       </span>
                     </td>
-                    {/* Distance */}
+                    {/* Distance (ft) */}
                     <td className="px-2.5 py-2 text-mid mono">{dist != null ? dist.toFixed(1) : '-'}</td>
-                    {/* Depth */}
+                    {/* Depth (%) */}
                     <td className={`px-2.5 py-2 mono ${
                       depth != null && depth >= 60 ? 'text-critical font-semibold' :
                       depth != null && depth >= 40 ? 'text-warn' :
@@ -193,14 +205,22 @@ export default function AnomalyTable({ matchedTable, onSelectAnomaly }) {
                     }`}>
                       {depth != null ? `${depth.toFixed(1)}%` : '-'}
                     </td>
-                    {/* Growth Rate */}
+                    {/* Length (in) */}
+                    <td className="px-2.5 py-2 text-mid mono">{length != null ? length.toFixed(2) : '-'}</td>
+                    {/* Width (in) */}
+                    <td className="px-2.5 py-2 text-mid mono">{width != null ? width.toFixed(2) : '-'}</td>
+                    {/* Depth Growth (%/yr) */}
                     <td className={`px-2.5 py-2 mono ${
-                      rate != null && rate > 3 ? 'text-critical font-semibold' :
-                      rate != null && rate > 1 ? 'text-warn' :
-                      rate != null ? 'text-mid' : 'text-lo'
+                      depthRate != null && depthRate > 3 ? 'text-critical font-semibold' :
+                      depthRate != null && depthRate > 1 ? 'text-warn' :
+                      depthRate != null ? 'text-mid' : 'text-lo'
                     }`}>
-                      {rate != null ? rate.toFixed(2) : '-'}
+                      {depthRate != null ? depthRate.toFixed(2) : '-'}
                     </td>
+                    {/* Length Growth (%/yr) */}
+                    <td className="px-2.5 py-2 text-mid mono">{lenRate != null ? lenRate.toFixed(2) : '-'}</td>
+                    {/* Width Growth (%/yr) */}
+                    <td className="px-2.5 py-2 text-mid mono">{widRate != null ? widRate.toFixed(2) : '-'}</td>
                     {/* Time to Critical */}
                     <td className={`px-2.5 py-2 mono ${
                       ttc != null && ttc < 5 ? 'text-critical font-semibold' : 'text-mid'
@@ -275,7 +295,7 @@ function ExpandedRowDetail({ row }) {
 
   return (
     <tr>
-      <td colSpan={8} className="px-4 py-3 bg-elevated/50 border-b border-edge-subtle">
+      <td colSpan={12} className="px-4 py-3 bg-elevated/50 border-b border-edge-subtle">
         <div className="space-y-3">
           {/* Per-run data */}
           <div>
@@ -326,12 +346,16 @@ function getSortValue(row, key) {
   const latestRun = row.run_2022 || row.run_2015 || row.run_2007;
   const latestGrowth = row.growth_15_22 || row.growth_07_22 || row.growth_07_15;
   switch (key) {
-    case 'status': return row.status;
+    case 'status': return STATUS_RANK[row.status] ?? 99;
     case 'feature_id': return latestRun?.feature_id;
     case 'severity': return row.severity;
     case 'latest_dist': return latestRun?.corrected_odometer_ft ?? latestRun?.odometer_ft;
     case 'latest_depth': return latestRun?.depth_pct;
-    case 'growth_rate': return latestGrowth?.annual_growth_rate_pct;
+    case 'latest_length': return latestRun?.length_in;
+    case 'latest_width': return latestRun?.width_in;
+    case 'depth_growth': return latestGrowth?.annual_growth_rate_pct;
+    case 'length_growth': return latestGrowth?.annual_length_growth_pct;
+    case 'width_growth': return latestGrowth?.annual_width_growth_pct;
     case 'ttc': return latestGrowth?.time_to_critical_years;
     case 'match_score':
       return row.match_score_07_15 || row.match_score_15_22 || row.match_score_07_22;
