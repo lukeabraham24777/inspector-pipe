@@ -8,6 +8,7 @@ import traceback
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel
 
 from ..core.normalizer import ingest_excel
 from ..core.alignment import align_runs
@@ -151,15 +152,17 @@ async def get_results():
     })
 
 
-@router.get("/export")
-async def export_xlsx():
-    """Export results as a multi-tab Excel file."""
-    if _latest_result is None:
-        raise HTTPException(status_code=404, detail="No results available. Upload a file first.")
+class ExportRequest(BaseModel):
+    matched_table: list[dict]
+    girth_weld_alignment: list[dict]
 
+
+@router.post("/export")
+async def export_xlsx(body: ExportRequest):
+    """Export results as a multi-tab Excel file."""
     xlsx_bytes = export_results_xlsx(
-        _latest_result["matched_table"],
-        _latest_result["alignment_result"],
+        body.matched_table,
+        {"girth_weld_alignment": body.girth_weld_alignment},
     )
 
     return Response(

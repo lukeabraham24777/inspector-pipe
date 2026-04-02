@@ -47,7 +47,7 @@ function App() {
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      await exportXlsx();
+      await exportXlsx(data);
     } catch (err) {
       setError('Export failed: ' + (err.response?.data?.detail || err.message));
     } finally {

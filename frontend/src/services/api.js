@@ -18,8 +18,11 @@ export async function getResults() {
   return response.data;
 }
 
-export async function exportXlsx() {
-  const response = await axios.get(`${API_BASE}/export`, {
+export async function exportXlsx(data) {
+  const response = await axios.post(`${API_BASE}/export`, {
+    matched_table: data.matched_table,
+    girth_weld_alignment: data.girth_weld_alignment,
+  }, {
     responseType: 'blob',
   });
 
