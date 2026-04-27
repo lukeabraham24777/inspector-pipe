@@ -1,6 +1,6 @@
 
 ## Demo
-[![Watch Demo](https://www.img.youtube.com/watch?v=V38EkU8Eapk.jpg)](https://www.youtube.com/watch?v=V38EkU8Eapk)
+[![Watch Demo](https://img.youtube.com/vi/V38EkU8Eapk/maxresdefault.jpg)](https://www.youtube.com/watch?v=V38EkU8Eapk)
 
 # ILI Pipeline Inspection Data Alignment System
 
