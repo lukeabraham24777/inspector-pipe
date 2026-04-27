@@ -1,3 +1,7 @@
+
+## Demo
+[![Watch Demo](https://img.youtube.com/vi/DtgI_douClg/maxresdefault.jpg)](https://www.youtube.com/shorts/DtgI_douClg)
+
 # ILI Pipeline Inspection Data Alignment System
 
 Automated multi-year inline inspection (ILI) data alignment system that processes pipeline inspection runs from 2007, 2015, and 2022 to produce a unified "Golden Thread" of pipeline health. The system overcomes odometer drift, heterogeneous schemas, and clock inconsistencies to track corrosion growth, predict future risk, and flag anomalies requiring immediate attention.
