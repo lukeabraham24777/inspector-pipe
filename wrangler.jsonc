@@ -1,0 +1,19 @@
+// Cloudflare Worker for the frontend; the FastAPI backend runs on Render (see worker/index.js).
+// Build command: npm --prefix frontend ci && npm --prefix frontend run build
+// Deploy command: npx wrangler@4 deploy
+// Build variable (optional): VITE_MAPBOX_TOKEN, for the pipeline map.
+{
+  "$schema": "https://unpkg.com/wrangler@4/config-schema.json",
+  "name": "inspector-pipe",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "frontend/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "API_ORIGIN": "https://inspector-pipe-api.onrender.com"
+  }
+}
