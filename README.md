@@ -6,6 +6,8 @@
 
 Automated multi-year inline inspection (ILI) data alignment system that processes pipeline inspection runs from 2007, 2015, and 2022 to produce a unified "Golden Thread" of pipeline health. The system overcomes odometer drift, heterogeneous schemas, and clock inconsistencies to track corrosion growth, predict future risk, and flag anomalies requiring immediate attention.
 
+**Live:** https://inspector-pipe.lukeabraham06.workers.dev (frontend on Cloudflare Workers; the API runs on Render at https://inspector-pipe-api.onrender.com and may take 30–60 s to wake after 15 idle minutes)
+
 ---
 
 ## Table of Contents
